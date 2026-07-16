@@ -1,0 +1,15 @@
+mcs.metadata:
+  componentName: Custom prompt 09/07/2026, 10:52:51
+kind: TaskDialog
+inputs:
+  - kind: AutomaticTaskInput
+    propertyName: SourcePDF
+    name: SourcePDF
+
+modelDisplayName: ExtractorPrompt
+modelDescription: Custom prompt 09/07/2026, 10:52:51
+action:
+  kind: InvokeAIBuilderModelTaskAction
+  aIModelId: 61530988-0618-4a3d-abbb-ef1c8b42d2fa
+
+outputMode: All

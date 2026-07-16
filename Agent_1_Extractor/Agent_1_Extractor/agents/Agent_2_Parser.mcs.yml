@@ -1,0 +1,35 @@
+mcs.metadata:
+  componentName: Agent_2_Parser
+  description: Parses the raw text
+kind: TaskDialog
+inputs:
+  - kind: ManualTaskInput
+    propertyName: rawText
+    value: =Global.RawTextPass
+
+  - kind: ManualTaskInput
+    propertyName: var2
+    value: "\" \""
+
+modelDisplayName: Agent_2_Parser
+modelDescription: Parses the raw text
+outputs:
+  - propertyName: parsedBlocks
+
+action:
+  kind: InvokeConnectedAgentTaskAction
+  inputType:
+    properties:
+      rawText:
+        displayName: RawText
+        isRequired: true
+        type: String
+
+      var2:
+        displayName: Var2
+        isRequired: true
+        type: String
+
+  botSchemaName: cr921_Agent1Parser
+  historyType:
+    kind: NoHistory

@@ -1,0 +1,51 @@
+mcs.metadata:
+  componentName: Main (Copy)
+kind: AdaptiveDialog
+beginDialog:
+  kind: OnActivity
+  id: main
+  type: Message
+  actions:
+    - kind: Question
+      id: question_p1lI3y
+      interruptionPolicy:
+        allowInterruption: true
+
+      variable: init:Global.SourceFile
+      prompt: File?
+      entity: FilePrebuiltEntity
+
+    - kind: InvokeAIBuilderModelAction
+      id: invokeAIBuilderModelAction_78Nfjy
+      input:
+        binding:
+          SourcePDF: =Global.SourceFile
+
+      output:
+        binding:
+          predictionOutput: Global.RawText
+
+      aIModelId: 61530988-0618-4a3d-abbb-ef1c8b42d2fa
+
+    - kind: SetVariable
+      id: setVariable_02oc9t
+      variable: Global.RawTextPass
+      value: =Global.RawText.text
+
+    - kind: BeginDialog
+      id: owbECM
+      dialog: cr921_Agent1Extractor.InvokeConnectedAgentTaskAction.Agent_2_Parser
+
+    - kind: SendActivity
+      id: sendActivity_Gz2uhD
+      activity: "{Global.ParsedBlocks}"
+
+    - kind: BeginDialog
+      id: X4x7qp
+      dialog: cr921_Agent1Extractor.InvokeConnectedAgentTaskAction.Agent_3_Reporter
+
+    - kind: EndDialog
+      id: fNrrtg
+
+inputType: {}
+outputType: {}

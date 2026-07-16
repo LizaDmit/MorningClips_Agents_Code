@@ -1,0 +1,23 @@
+﻿displayName: Agent_1_Extractor
+schemaName: cr921_Agent1Extractor
+accessControlPolicy: GroupMembership
+authenticationMode: Integrated
+authenticationTrigger: Always
+configuration:
+  settings:
+    GenerativeActionsEnabled: false
+
+  isAgentConnectable: true
+  gPTSettings:
+    defaultSchemaName: cr921_Agent1Extractor.gpt.default
+
+  aISettings:
+    useModelKnowledge: true
+    isFileAnalysisEnabled: false
+    isSemanticSearchEnabled: true
+    contentModeration: Low
+    optInUseLatestModels: false
+
+publishedOn: 2026-07-16T03:24:44.0000000Z
+template: default-2.1.0
+language: 1033

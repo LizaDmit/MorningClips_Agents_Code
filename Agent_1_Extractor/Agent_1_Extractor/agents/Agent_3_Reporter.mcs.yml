@@ -1,0 +1,22 @@
+mcs.metadata:
+  componentName: Agent_3_Reporter
+  description: Takes a parsed text and makes a report out of it
+kind: TaskDialog
+inputs:
+  - kind: AutomaticTaskInput
+    propertyName: parsedIn
+
+modelDisplayName: Agent_3_Reporter
+modelDescription: Takes a parsed text and makes a report out of it
+action:
+  kind: InvokeConnectedAgentTaskAction
+  inputType:
+    properties:
+      parsedIn:
+        displayName: ParsedIn
+        isRequired: true
+        type: String
+
+  botSchemaName: cr921_Agent3Reporter
+  historyType:
+    kind: ConversationHistory
