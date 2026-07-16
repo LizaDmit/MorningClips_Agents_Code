@@ -1,0 +1,8 @@
+mcs.metadata:
+  componentName: ParsedBlocks
+kind: Variable
+name: ParsedBlocks
+scope: Conversation
+isExternalInitializationAllowed: true
+isOutputToExternalCallers: true
+initializationTimeoutInMilliseconds: 0
