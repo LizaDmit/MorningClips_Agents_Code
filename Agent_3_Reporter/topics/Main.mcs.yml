@@ -1,0 +1,49 @@
+mcs.metadata:
+  componentName: Main
+kind: AdaptiveDialog
+beginDialog:
+  kind: OnActivity
+  id: main
+  type: Message
+  actions:
+    - kind: SetVariable
+      id: setVariable_initParsedIn
+      variable: Global.ParsedIn
+      value: "\"\""
+
+    - kind: Question
+      id: question_ReportDate
+      interruptionPolicy:
+        allowInterruption: true
+
+      variable: init:Topic.ReportDate
+      prompt: Report date?
+      entity: StringPrebuiltEntity
+
+    - kind: InvokeAIBuilderModelAction
+      id: invokeAIBuilderModelAction_PEOO6B
+      input:
+        binding:
+          ParsedBlocks: =Global.ParsedIn
+          ReportDate: =Topic.ReportDate
+
+      output:
+        binding:
+          predictionOutput: Topic.ReportRaw
+
+      aIModelId: 24440e48-f5ad-4bd7-b462-50e13f25e255
+
+    - kind: SetVariable
+      id: setVariable_ReportText
+      variable: Global.Report
+      value: =Topic.ReportRaw.text
+
+    - kind: SendActivity
+      id: sendActivity_Report
+      activity: "{Global.Report}"
+
+    - kind: EndDialog
+      id: endDialog_main
+
+inputType: {}
+outputType: {}

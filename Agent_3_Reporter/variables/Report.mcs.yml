@@ -1,0 +1,112 @@
+mcs.metadata:
+  componentName: Report
+kind: Variable
+name: Report
+isExternalInitializationAllowed: false
+isOutputToExternalCallers: true
+initializationTimeoutInMilliseconds: 0
+aIVisibility: Hidden
+canEdit: true
+dataType:
+  $kind: Record
+  diagnostics:
+  properties:
+    documentOutput:
+      $kind: PropertyInfo
+      diagnostics:
+      displayName: Document Output
+      enumDisplayNames:
+      enumValues:
+      examples:
+      order: 2
+      type:
+        $kind: Record
+        diagnostics:
+        properties:
+          fileName:
+            $kind: PropertyInfo
+            diagnostics:
+            displayName: File Name
+            enumDisplayNames:
+            enumValues:
+            examples:
+            order: 1
+            type:
+              $kind: String
+              diagnostics:
+
+          mimeType:
+            $kind: PropertyInfo
+            diagnostics:
+            displayName: Mime Type
+            enumDisplayNames:
+            enumValues:
+            examples:
+            order: 0
+            type:
+              $kind: String
+              diagnostics:
+
+    finishReason:
+      $kind: PropertyInfo
+      diagnostics:
+      displayName: Finish Reason
+      enumDisplayNames:
+      enumValues:
+      examples:
+      order: 0
+      type:
+        $kind: String
+        diagnostics:
+
+    structuredOutput:
+      $kind: PropertyInfo
+      diagnostics:
+      enumDisplayNames:
+      enumValues:
+      examples:
+      order: 3
+      type:
+        $kind: Record
+        diagnostics:
+        properties:
+          response:
+            $kind: PropertyInfo
+            diagnostics:
+            enumDisplayNames:
+            enumValues:
+            examples:
+            order: 0
+            type:
+              $kind: Record
+              diagnostics:
+              properties:
+                ReportBody:
+                  $kind: PropertyInfo
+                  diagnostics:
+                  displayName: ReportBody
+                  enumDisplayNames:
+                  enumValues:
+                  examples:
+                  order: 0
+                  type:
+                    $kind: String
+                    diagnostics:
+
+    text:
+      $kind: PropertyInfo
+      diagnostics:
+      displayName: Text
+      enumDisplayNames:
+      enumValues:
+      examples:
+      order: 1
+      type:
+        $kind: String
+        diagnostics:
+
+displayNameForDataType: record
+isUserScope: false
+propertyPath: Global.Report
+variableName: Report
+variableTypePrefix: Global

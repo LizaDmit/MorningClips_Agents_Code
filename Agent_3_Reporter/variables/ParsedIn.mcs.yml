@@ -1,0 +1,18 @@
+mcs.metadata:
+  componentName: ParsedIn
+kind: Variable
+name: ParsedIn
+isExternalInitializationAllowed: true
+isOutputToExternalCallers: false
+initializationTimeoutInMilliseconds: 0
+aIVisibility: Hidden
+canEdit: true
+dataType:
+  $kind: String
+  diagnostics:
+
+displayNameForDataType: string
+isUserScope: false
+propertyPath: Global.ParsedIn
+variableName: ParsedIn
+variableTypePrefix: Global

@@ -1,0 +1,19 @@
+mcs.metadata:
+  componentName: Custom prompt 09/07/2026, 15:03:17
+kind: TaskDialog
+inputs:
+  - kind: AutomaticTaskInput
+    propertyName: ParsedBlocks
+    name: ParsedBlocks
+
+  - kind: AutomaticTaskInput
+    propertyName: ReportDate
+    name: ReportDate
+
+modelDisplayName: ReporterPrompt
+modelDescription: Custom prompt 09/07/2026, 15:03:17
+action:
+  kind: InvokeAIBuilderModelTaskAction
+  aIModelId: 24440e48-f5ad-4bd7-b462-50e13f25e255
+
+outputMode: All
