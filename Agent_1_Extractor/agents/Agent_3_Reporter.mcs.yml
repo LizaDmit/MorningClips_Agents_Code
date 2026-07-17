@@ -3,8 +3,9 @@ mcs.metadata:
   description: Takes a parsed text and makes a report out of it
 kind: TaskDialog
 inputs:
-  - kind: AutomaticTaskInput
+  - kind: ManualTaskInput
     propertyName: parsedIn
+    value: =Global.ParsedBlocksPass
 
 modelDisplayName: Agent_3_Reporter
 modelDescription: Takes a parsed text and makes a report out of it
@@ -19,4 +20,4 @@ action:
 
   botSchemaName: cr921_Agent3Reporter
   historyType:
-    kind: ConversationHistory
+    kind: NoHistory

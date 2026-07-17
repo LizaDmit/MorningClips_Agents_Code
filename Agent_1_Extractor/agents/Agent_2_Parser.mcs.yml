@@ -7,14 +7,11 @@ inputs:
     propertyName: rawText
     value: =Global.RawTextPass
 
-  - kind: ManualTaskInput
-    propertyName: var2
-    value: "\" \""
-
 modelDisplayName: Agent_2_Parser
 modelDescription: Parses the raw text
 outputs:
   - propertyName: parsedBlocks
+    variable: Global.ParsedBlocksPass
 
 action:
   kind: InvokeConnectedAgentTaskAction
@@ -25,9 +22,10 @@ action:
         isRequired: true
         type: String
 
-      var2:
-        displayName: Var2
-        isRequired: true
+  outputType:
+    properties:
+      parsedBlocks:
+        displayName: ParsedBlocks
         type: String
 
   botSchemaName: cr921_Agent1Parser

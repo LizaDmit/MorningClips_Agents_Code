@@ -32,13 +32,18 @@ beginDialog:
       variable: Global.RawTextPass
       value: =Global.RawText.text
 
+    - kind: SetVariable
+      id: setVariable_initPBP
+      variable: Global.ParsedBlocksPass
+      value: "\"\""
+
     - kind: BeginDialog
       id: owbECM
       dialog: cr921_Agent1Extractor.InvokeConnectedAgentTaskAction.Agent_2_Parser
 
     - kind: SendActivity
       id: sendActivity_Gz2uhD
-      activity: "{Global.ParsedBlocks}"
+      activity: "{Global.ParsedBlocksPass}"
 
     - kind: BeginDialog
       id: X4x7qp
