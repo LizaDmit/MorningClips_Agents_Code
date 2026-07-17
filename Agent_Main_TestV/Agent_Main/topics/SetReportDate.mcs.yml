@@ -1,0 +1,69 @@
+mcs.metadata:
+  componentName: Main
+kind: AdaptiveDialog
+beginDialog:
+  kind: OnActivity
+  id: main
+  type: Message
+  actions:
+    - kind: Question
+      id: question_TumGLr
+      interruptionPolicy:
+        allowInterruption: true
+
+      variable: Topic.File
+      prompt: File?
+      entity:
+        kind: FilePrebuiltEntity
+        sensitivityLevel: None
+        includeMetadata: true
+
+    - kind: InvokeAIBuilderModelAction
+      id: maMcCF
+      latencyMessageSettings:
+        allowLatencyMessage: false
+
+      input:
+        binding:
+          ArticleFile: =Topic.File
+
+      output:
+        binding:
+          predictionOutput: Global.varExtractedText
+
+      aIModelId: ca292c05-9f15-4a7a-81da-ef451bcb3842
+
+    - kind: BeginDialog
+      id: ar2p3d
+      input:
+        binding:
+          ArticleFile: =Global.varExtractedText.text
+
+      dialog: cr921_Agent2Reporter.agent.Agent
+      output:
+        binding:
+          Articles: Topic.varArticles
+
+    - kind: BeginDialog
+      id: aLB5E9
+      input:
+        binding:
+          ArticleBlocks: =Topic.varArticles
+
+      dialog: cr921_Agent2Reporter.agent.Agent_Uju
+      output:
+        binding:
+          FinalReport: Global.varFinalReporttext
+
+    - kind: SendActivity
+      id: sendActivity_wjMIy4
+      activity:
+        value: =Global.varFinalReport
+        text:
+          - "{Global.varFinalReport}"
+
+    - kind: EndDialog
+      id: ASDhcG
+
+inputType: {}
+outputType: {}

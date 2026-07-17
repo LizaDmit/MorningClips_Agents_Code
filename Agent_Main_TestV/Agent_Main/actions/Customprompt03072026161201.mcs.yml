@@ -1,0 +1,20 @@
+mcs.metadata:
+  componentName: Custom prompt 03/07/2026, 16:12:01
+kind: TaskDialog
+inputs:
+  - kind: ManualTaskInput
+    propertyName: ArticleFile
+    value: System.Activity.Attachments
+
+modelDisplayName: Extract Article Text
+modelDescription: Extracts the complete raw text from an uploaded article file, verbatim, for downstream parsing.
+outputs:
+  - propertyName: predictionOutput.text
+    name: ExtractedText
+    description: The complete verbatim text extracted from the uploaded article file.
+
+action:
+  kind: InvokeAIBuilderModelTaskAction
+  aIModelId: ca292c05-9f15-4a7a-81da-ef451bcb3842
+
+outputMode: Specific

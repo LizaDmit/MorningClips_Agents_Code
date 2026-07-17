@@ -1,0 +1,22 @@
+﻿displayName: Agent_Main
+schemaName: cr921_Agent2Reporter
+accessControlPolicy: GroupMembership
+authenticationMode: Integrated
+authenticationTrigger: Always
+configuration:
+  settings:
+    GenerativeActionsEnabled: false
+
+  isAgentConnectable: false
+  gPTSettings:
+    defaultSchemaName: cr921_Agent2Reporter.gpt.default
+
+  aISettings:
+    useModelKnowledge: false
+    isFileAnalysisEnabled: false
+    isSemanticSearchEnabled: true
+    contentModeration: Low
+    optInUseLatestModels: false
+
+template: default-2.1.0
+language: 1033
