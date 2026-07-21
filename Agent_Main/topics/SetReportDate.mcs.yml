@@ -1,0 +1,130 @@
+mcs.metadata:
+  componentName: Main
+kind: AdaptiveDialog
+beginDialog:
+  kind: OnRecognizedIntent
+  id: main
+  intent:
+    triggerQueries:
+      - generate morning clips
+      - morning clips
+      - run morning clips
+      - generate report
+      - new report
+      - report
+
+  actions:
+    - kind: SetVariable
+      id: clear_srcFile
+      variable: Global.SourceFile
+      value: =Blank()
+
+    - kind: SetVariable
+      id: clear_rptDate
+      variable: Global.ReportDate
+      value: =Blank()
+
+    - kind: SetVariable
+      id: clear_rawText
+      variable: Global.RawText
+      value: =Blank()
+
+    - kind: SetVariable
+      id: clear_parsedBlocks
+      variable: Global.parsedBlocks
+      value: =Blank()
+
+    - kind: SetVariable
+      id: clear_reportRaw
+      variable: Global.ReportRaw
+      value: =Blank()
+
+    - kind: SetVariable
+      id: clear_report
+      variable: Global.Report
+      value: =Blank()
+
+    - kind: Question
+      id: question_p1lI3y
+      interruptionPolicy:
+        allowInterruption: true
+
+      variable: Global.SourceFile
+      prompt: File?
+      entity: FilePrebuiltEntity
+
+    - kind: Question
+      id: question_rptDate
+      interruptionPolicy:
+        allowInterruption: true
+
+      variable: Global.ReportDate
+      prompt: Report date?
+      entity: StringPrebuiltEntity
+
+    - kind: InvokeAIBuilderModelAction
+      id: invokeAIBuilderModelAction_78Nfjy
+      input:
+        binding:
+          SourcePDF: =Global.SourceFile
+
+      output:
+        binding:
+          predictionOutput: Global.RawText
+
+      aIModelId: 61530988-0618-4a3d-abbb-ef1c8b42d2fa
+
+    - kind: SetVariable
+      id: setVariable_02oc9t
+      variable: Global.RawTextPass
+      value: =Global.RawText.text
+
+    - kind: SetVariable
+      id: setVariable_initPBP
+      variable: Global.ParsedBlocksPass
+      value: "\"\""
+
+    - kind: InvokeAIBuilderModelAction
+      id: invokeAIBuilderModelAction_Ea8UE1
+      input:
+        binding:
+          RawText: =Global.RawText.text
+
+      output:
+        binding:
+          predictionOutput: Global.parsedBlocks
+
+      aIModelId: f1025288-9be6-4e2e-a1b6-18ec62070ff8
+
+    - kind: SetVariable
+      id: setVariable_pbExtract
+      variable: Global.ParsedBlocksPass
+      value: =Text(Global.parsedBlocks.text)
+
+    - kind: InvokeAIBuilderModelAction
+      id: invokeAIBuilderModelAction_Rep01
+      input:
+        binding:
+          ParsedBlocks: =Global.ParsedBlocksPass
+          ReportDate: =Global.ReportDate
+
+      output:
+        binding:
+          predictionOutput: Global.ReportRaw
+
+      aIModelId: 24440e48-f5ad-4bd7-b462-50e13f25e255
+
+    - kind: SetVariable
+      id: setVariable_repExtract
+      variable: Global.Report
+      value: =Text(Global.ReportRaw.text)
+
+    - kind: SendActivity
+      id: sendActivity_finalRpt
+      activity: "{Global.Report}"
+
+    - kind: EndDialog
+      id: fNrrtg
+
+inputType: {}
+outputType: {}

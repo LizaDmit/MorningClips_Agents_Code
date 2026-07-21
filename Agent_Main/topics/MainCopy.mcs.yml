@@ -1,0 +1,70 @@
+mcs.metadata:
+  componentName: Main (Copy)
+kind: AdaptiveDialog
+beginDialog:
+  kind: OnActivity
+  id: main
+  type: Message
+  actions:
+    - kind: Question
+      id: question_TumGLr
+      interruptionPolicy:
+        allowInterruption: true
+
+      variable: init:Topic.varUploadedFile
+      prompt: File?
+      entity:
+        kind: FilePrebuiltEntity
+        includeMetadata: true
+
+    - kind: InvokeAIBuilderModelAction
+      id: maMcCF
+      latencyMessageSettings:
+        allowLatencyMessage: false
+
+      input:
+        binding:
+          ArticleFile: =Topic.varUploadedFile
+
+      output:
+        binding:
+          predictionOutput: Global.varExtractedText
+
+      aIModelId: ca292c05-9f15-4a7a-81da-ef451bcb3842
+
+    - kind: InvokeAIBuilderModelAction
+      id: invokeAIBuilderModelAction_AZI4Sg
+      input:
+        binding:
+          ArticleText: =Global.varExtractedText.text
+
+      output:
+        binding:
+          predictionOutput: Topic.varArticlesOutput
+
+      aIModelId: aa167bb7-4177-4ff5-8cdb-8b2ba2aa1583
+
+    - kind: InvokeAIBuilderModelAction
+      id: invokeAIBuilderModelAction_iIL1pE
+      input:
+        binding:
+          ArticleBlocksInput: =Topic.varArticlesOutput.text
+
+      output:
+        binding:
+          predictionOutput: Global.varFinalReport
+
+      aIModelId: dc760c0e-fa81-44b2-8518-0886e25a93f6
+
+    - kind: SendActivity
+      id: sendActivity_wjMIy4
+      activity:
+        value: =Global.varFinalReport.text
+        text:
+          - "{Global.varFinalReport.text}"
+
+    - kind: EndDialog
+      id: ASDhcG
+
+inputType: {}
+outputType: {}
