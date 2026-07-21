@@ -3,21 +3,35 @@ Option Explicit
 
  
 
-' ================= FormatMorningClips (v5 - Windows, no line-continuations) =================
+' ================= FormatMorningClips (v8 - Windows, CM indents + margins) =================
 
-' Input: raw Reporter .docx (auto-numbered sections/headlines/socials,
+' Input: raw Reporter .docx. Output: Report_20 visual format.
 
-'        URL glued to headline as HYPERLINK FIELD, merged bodies, "Social channels:" header)
-
-' Output: Report_20 visual format. One-shot on a FRESH file; not idempotent.
+' One-shot on a FRESH file; not idempotent.
 
  
 
-' ---- Tunable constants ----
+' ---- Indent constants (CENTIMETERS) ----
 
-Private Const IND_SECTION As Single = 0.25
+Private Const IND_TRAD    As Single = 0.04
 
-Private Const IND_NAME    As Single = 0.5
+Private Const IND_CAT     As Single = 0.83
+
+Private Const IND_ITEM    As Single = 1.31
+
+Private Const IND_NONEWS  As Single = 1.3
+
+' ---- Margins (CENTIMETERS) ----
+
+Private Const MARGIN_TOP    As Single = 2.49
+
+Private Const MARGIN_BOTTOM As Single = 2.54
+
+Private Const MARGIN_LEFT   As Single = 3.17
+
+Private Const MARGIN_RIGHT  As Single = 3.17
+
+' ---- Spacing (points) ----
 
 Private Const SP_TITLE    As Single = 12
 
@@ -31,7 +45,7 @@ Private Const SP_HEAD     As Single = 10
 
 Private Const SP_BODY     As Single = 10
 
-Private Const DIV_LEN     As Integer = 45
+Private Const DIV_LEN     As Integer = 40
 
  
 
@@ -50,6 +64,20 @@ Sub FormatMorningClips()
     ActiveWindow.View.ShowFieldCodes = False
 
     On Error GoTo 0
+
+ 
+
+    With doc.PageSetup
+
+        .TopMargin = CentimetersToPoints(MARGIN_TOP)
+
+        .BottomMargin = CentimetersToPoints(MARGIN_BOTTOM)
+
+        .LeftMargin = CentimetersToPoints(MARGIN_LEFT)
+
+        .RightMargin = CentimetersToPoints(MARGIN_RIGHT)
+
+    End With
 
  
 
@@ -144,6 +172,11 @@ Sub FormatMorningClips()
         p.SpaceBefore = 0: p.SpaceAfter = 0
 
         p.TabStops.ClearAll
+        
+        p.Borders(wdBorderTop).LineStyle = wdLineStyleNone
+        p.Borders(wdBorderBottom).LineStyle = wdLineStyleNone
+        p.Borders(wdBorderLeft).LineStyle = wdLineStyleNone
+        p.Borders(wdBorderRight).LineStyle = wdLineStyleNone
 
  
 
@@ -169,55 +202,77 @@ Sub FormatMorningClips()
 
             p.Range.Font.Bold = True
 
+            p.LeftIndent = CentimetersToPoints(IND_TRAD)
+
             p.SpaceAfter = SP_TRAD
 
         ElseIf IsSection(s) Then
 
             p.Range.Font.Bold = True
 
-            p.LeftIndent = InchesToPoints(IND_NAME)
+            p.LeftIndent = CentimetersToPoints(IND_NONEWS)
 
-            p.FirstLineIndent = InchesToPoints(IND_SECTION - IND_NAME)
+            p.FirstLineIndent = CentimetersToPoints(IND_CAT - IND_NONEWS)
 
             p.SpaceBefore = SP_SECTION
+
+            p.TabStops.ClearAll
+
+            p.TabStops.Add Position:=CentimetersToPoints(IND_NONEWS), Alignment:=wdAlignTabLeft
 
         ElseIf IsSocial(s) Then
 
             p.Range.Font.Bold = True
 
-            p.LeftIndent = InchesToPoints(IND_SECTION)
+            p.LeftIndent = CentimetersToPoints(IND_NONEWS)
+
+            p.FirstLineIndent = CentimetersToPoints(IND_CAT - IND_NONEWS)
 
             p.SpaceBefore = SP_SECTION
+
+            p.TabStops.ClearAll
+
+            p.TabStops.Add Position:=CentimetersToPoints(IND_NONEWS), Alignment:=wdAlignTabLeft
 
         ElseIf IsHeadline(s) Then
 
             p.Range.Font.Bold = True
 
-            p.LeftIndent = InchesToPoints(IND_NAME)
+            p.LeftIndent = CentimetersToPoints(IND_ITEM)
+
+            p.FirstLineIndent = CentimetersToPoints(IND_CAT - IND_ITEM)
 
             p.SpaceBefore = SP_HEAD
 
+            p.TabStops.ClearAll
+
+            p.TabStops.Add Position:=CentimetersToPoints(IND_ITEM), Alignment:=wdAlignTabLeft
+
         ElseIf IsURL(s) Then
 
-            p.LeftIndent = InchesToPoints(IND_NAME)
+            p.LeftIndent = CentimetersToPoints(IND_ITEM)
 
             MakeHyperlink p, s
 
         ElseIf IsDivider(s) Then
 
+            p.LeftIndent = 0
+
             p.SpaceBefore = SP_SECTION
 
         ElseIf s = "No relevant news" Then
-            SetCleanText p, "No relevant news"
-            p.LeftIndent = InchesToPoints(IND_NAME)
-            p.FirstLineIndent = 0
-            p.SpaceAfter = SP_BODY
 
-            
+            SetCleanText p, "No relevant news"
+
+            p.LeftIndent = CentimetersToPoints(IND_NONEWS)
+
+            p.FirstLineIndent = 0
+
+            p.SpaceAfter = SP_BODY
 
         Else
 
-            p.LeftIndent = InchesToPoints(IND_NAME)
+            p.LeftIndent = CentimetersToPoints(IND_ITEM)
 
             p.SpaceAfter = SP_BODY
 
@@ -425,7 +480,7 @@ Private Sub SplitSocials()
 
                 If Left(s, Len(lbl)) = lbl And Mid(s, Len(lbl) + 1, 1) = " " Then
 
-                    p.Range.InsertBefore ChrW(8226) & " "
+                    p.Range.InsertBefore ChrW(8226) & vbTab
 
                     cutPos = p.Range.Start + 2 + Len(lbl)
 
@@ -471,15 +526,15 @@ Private Sub PrependSectionNumerals()
 
         If s = "Neil Shen" Then
 
-            p.Range.InsertBefore "i. "
+            p.Range.InsertBefore "i." & vbTab
 
         ElseIf s = "Company News" Then
 
-            p.Range.InsertBefore "ii. "
+            p.Range.InsertBefore "ii." & vbTab
 
         ElseIf s = "VC Industry News" Then
 
-            p.Range.InsertBefore "iii. "
+            p.Range.InsertBefore "iii." & vbTab
 
         End If
 
@@ -511,7 +566,7 @@ Private Sub NumberHeadlines()
 
             If n = 0 Then n = 1
 
-            p.Range.InsertBefore CStr(n) & ". "
+            p.Range.InsertBefore CStr(n) & "." & vbTab
 
             n = n + 1
 
@@ -625,7 +680,7 @@ End Function
 
 Private Function IsSection(s As String) As Boolean
 
-    IsSection = (s Like "i. *") Or (s Like "ii. *") Or (s Like "iii. *")
+    IsSection = (s Like "i." & vbTab & "*") Or (s Like "ii." & vbTab & "*") Or (s Like "iii." & vbTab & "*") Or (s Like "i. *") Or (s Like "ii. *") Or (s Like "iii. *")
 
 End Function
 
@@ -633,11 +688,13 @@ End Function
 
 Private Function IsSocial(s As String) As Boolean
 
-    Dim b As String
+    Dim bt As String, bs As String
 
-    b = ChrW(8226) & " "
+    bt = ChrW(8226) & vbTab
 
-    IsSocial = (s = b & "Facebook") Or (s = b & "X (Twitter)") Or (s = b & "YouTube")
+    bs = ChrW(8226) & " "
+
+    IsSocial = (s = bt & "Facebook") Or (s = bt & "X (Twitter)") Or (s = bt & "YouTube") Or (s = bs & "Facebook") Or (s = bs & "X (Twitter)") Or (s = bs & "YouTube")
 
 End Function
 
@@ -670,6 +727,20 @@ Private Function IsDivider(s As String) As Boolean
     End If
 
 End Function
+
+ 
+
+Private Sub SetCleanText(p As Paragraph, newText As String)
+
+    Dim r As Range
+
+    Set r = p.Range
+
+    r.MoveEnd wdCharacter, -1
+
+    r.Text = newText
+
+End Sub
 
  
 
@@ -755,12 +826,6 @@ Private Sub HiliteList(rng As Range, terms() As String, clr As Long)
 
 End Sub
 
-Private Sub SetCleanText(p As Paragraph, newText As String)
-    Dim r As Range
-    Set r = p.Range
-    r.MoveEnd wdCharacter, -1      ' keep paragraph mark
-    r.Text = newText
-End Sub
  
 
 Private Sub HiliteTerm(rng As Range, term As String, clr As Long)
