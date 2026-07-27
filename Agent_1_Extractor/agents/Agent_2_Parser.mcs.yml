@@ -11,7 +11,6 @@ modelDisplayName: Agent_2_Parser
 modelDescription: Parses the raw text
 outputs:
   - propertyName: parsedBlocks
-    variable: Global.ParsedBlocksPass
 
 action:
   kind: InvokeConnectedAgentTaskAction

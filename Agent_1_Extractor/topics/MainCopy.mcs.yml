@@ -39,8 +39,11 @@ beginDialog:
 
     - kind: BeginDialog
       id: owbECM
+      output:
+        binding:
+          parsedBlocks: Global.ParsedBlocksPass
       dialog: cr921_Agent1Extractor.InvokeConnectedAgentTaskAction.Agent_2_Parser
-
+      
     - kind: SendActivity
       id: sendActivity_Gz2uhD
       activity: "{Global.ParsedBlocksPass}"
