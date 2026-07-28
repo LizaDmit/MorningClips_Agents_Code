@@ -1,0 +1,15 @@
+mcs.metadata:
+  componentName: TokenFix
+kind: TaskDialog
+inputs:
+  - kind: AutomaticTaskInput
+    propertyName: ParsedIn
+    name: ParsedIn
+
+modelDisplayName: TokenFix
+modelDescription: TokenFix
+action:
+  kind: InvokeAIBuilderModelTaskAction
+  aIModelId: faf115fa-1117-4480-840d-4a5ae1252af0
+
+outputMode: All

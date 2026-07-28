@@ -44,6 +44,16 @@ beginDialog:
       variable: Global.Report
       value: =Blank()
 
+    - kind: SetVariable
+      id: clear_fullArticlesRaw
+      variable: Global.FullArticlesRaw
+      value: =Blank()
+
+    - kind: SetVariable
+      id: clear_fullArticles
+      variable: Global.FullArticles
+      value: =Blank()
+
     - kind: Question
       id: question_p1lI3y
       interruptionPolicy:
@@ -119,9 +129,33 @@ beginDialog:
       variable: Global.Report
       value: =Text(Global.ReportRaw.text)
 
+    - kind: InvokeAIBuilderModelAction
+      id: invokeAIBuilderModelAction_Full01
+      displayName: FullArticlesPrompt
+      input:
+        binding:
+          ParsedBlocks: =Global.ParsedBlocksPass
+          Summary: =Global.Report
+
+      output:
+        binding:
+          predictionOutput: Global.FullArticlesRaw
+
+      aIModelId: 84d54538-de14-4948-b693-06162f078989
+
+    - kind: SetVariable
+      id: setVariable_faExtract
+      variable: Global.FullArticles
+      value: =Text(Global.FullArticlesRaw.text)
+
     - kind: SendActivity
       id: sendActivity_finalRpt
-      activity: "{Global.Report}"
+      activity: |-
+        ```
+        {Global.Report}
+
+        {Global.FullArticles}
+        ```
 
     - kind: EndDialog
       id: fNrrtg
