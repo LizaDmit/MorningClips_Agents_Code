@@ -36,6 +36,8 @@ Private Const DIV_LEN     As Integer = 40
 
 Sub FormatMorningClips()
 
+    StripSummaryHeadlineNumbers
+
     Dim doc As Document
     Set doc = ActiveDocument
     Application.ScreenUpdating = False
@@ -83,7 +85,9 @@ Sub FormatMorningClips()
     SplitTitleDate
     SplitBylineDate
     SplitUrlOffHeadlines
+    StripSocialMarkers
     SplitSocials
+    BulletSocialLabels
     PrependSectionNumerals
     NumberHeadlines
     DenumberLeakedRosters
@@ -145,9 +149,11 @@ Sub FormatMorningClips()
             p.TabStops.Add Position:=CentimetersToPoints(IND_NONEWS), Alignment:=wdAlignTabLeft
         ElseIf IsSocial(s) Then
             p.Range.Font.Bold = True
+            doc.Range(p.Range.Start, p.Range.Start + 2).Font.Bold = False
             p.LeftIndent = CentimetersToPoints(IND_NONEWS)
             p.FirstLineIndent = CentimetersToPoints(IND_CAT - IND_NONEWS)
             p.SpaceBefore = SP_SECTION
+            p.SpaceAfter = 0
             p.TabStops.ClearAll
             p.TabStops.Add Position:=CentimetersToPoints(IND_NONEWS), Alignment:=wdAlignTabLeft
         ElseIf IsRosterLine(s) Then
@@ -187,15 +193,14 @@ Sub FormatMorningClips()
 
     StripColorTags
     HighlightAll
-
     SplitRosterLines
     NumberRosterEntries
     SplitEntryHeaders
-    RepairLongParagraphs
+    DashFullArticleHeadlines
+    FixDivider
 
     Application.ScreenUpdating = True
     MsgBox "FormatMorningClips done.", vbInformation
-
 End Sub
 
 
@@ -700,65 +705,6 @@ Sub SplitRosterLines()
 End Sub
 
 
-Sub RepairLongParagraphs()
-    ' Two-threshold split. Summary: 700 (tuned on summary paragraphs).
-    ' Full Articles: 1400 - high enough to leave genuine long verbatim
-    ' paragraphs whole (a 700-900 char quote stays one paragraph) while still
-    ' breaking up 2000+ char blobs where the Extractor lost every break.
-    Dim doc As Document
-    Dim para As Paragraph
-    Dim rng As Range
-    Dim s As String
-    Dim i As Long, p As Long, faIndex As Long
-    Dim splitPos() As Long
-    Dim nSplits As Long
-    Dim paraStart As Long
-    Dim maxLen As Long
-    Const MAXLEN_SUMMARY As Long = 700
-    Const MAXLEN_FULL    As Long = 1400
-
-    Set doc = ActiveDocument
-
-    faIndex = FullArticlesStart()
-    If faIndex = 0 Then faIndex = doc.Paragraphs.Count + 1
-
-    For p = doc.Paragraphs.Count To 1 Step -1
-        Set para = doc.Paragraphs(p)
-        Set rng = para.Range
-        s = rng.Text
-        If Len(s) > 0 Then
-            If Right$(s, 1) = vbCr Then s = Left$(s, Len(s) - 1)
-        End If
-
-        If p >= faIndex Then maxLen = MAXLEN_FULL Else maxLen = MAXLEN_SUMMARY
-
-        If Len(s) <= maxLen Then GoTo NextPara
-        If InStr(s, vbTab) > 0 Then GoTo NextPara
-
-        paraStart = rng.Start
-
-        nSplits = 0
-        ReDim splitPos(1 To Len(s))
-        For i = 1 To Len(s) - 2
-            If (Mid$(s, i, 1) = "." Or Mid$(s, i, 1) = "!" Or Mid$(s, i, 1) = "?") _
-               And Mid$(s, i + 1, 1) = " " _
-               And IsUpperLetter(Mid$(s, i + 2, 1)) Then
-                If Not EndsWithAbbrev(Left$(s, i)) Then
-                    nSplits = nSplits + 1
-                    splitPos(nSplits) = i + 1
-                End If
-            End If
-        Next i
-
-        For i = nSplits To 1 Step -1
-            Dim sp As Range
-            Set sp = doc.Range(paraStart + splitPos(i) - 1, paraStart + splitPos(i))
-            sp.Text = vbCr
-        Next i
-NextPara:
-    Next p
-End Sub
-
 
 Private Sub StripColorTags()
     ' Backstop: delete literal color-tag markup if the Reporter/FullArticles
@@ -1005,4 +951,128 @@ Private Sub SplitBylineDate()
         .MatchWildcards = True
         .Execute Replace:=wdReplaceAll
     End With
+End Sub
+
+Sub StripSummaryHeadlineNumbers()
+    Dim i As Long, p As Paragraph, t As String, dotPos As Long, r As Range
+    For i = 1 To ActiveDocument.Paragraphs.Count
+        Set p = ActiveDocument.Paragraphs(i)
+        t = Replace(p.Range.Text, Chr(13), "")
+        If Left(t, 13) = "FULL ARTICLES" Then Exit For
+        If InStr(t, " | ") > 0 Then
+            If t Like "#. *" Or t Like "##. *" Then
+                dotPos = InStr(t, ". ")
+                Set r = p.Range.Duplicate
+                r.SetRange p.Range.Start, p.Range.Start + dotPos + 1
+                r.Delete
+            End If
+        End If
+    Next i
+End Sub
+
+Sub DashFullArticleHeadlines()
+    Dim i As Long, p As Paragraph, t As String, dotPos As Long, r As Range
+    Dim inFull As Boolean
+    inFull = False
+    For i = 1 To ActiveDocument.Paragraphs.Count
+        Set p = ActiveDocument.Paragraphs(i)
+        t = Replace(p.Range.Text, Chr(13), "")
+        If Left(t, 13) = "FULL ARTICLES" Then inFull = True
+        If inFull And InStr(t, " | ") > 0 Then
+            If t Like "#. *" Or t Like "##. *" Then
+                dotPos = InStr(t, ". ")
+                Set r = p.Range.Duplicate
+                r.SetRange p.Range.Start, p.Range.Start + dotPos + 1
+                r.Text = "- "
+            End If
+        End If
+    Next i
+End Sub
+
+Sub FixDivider()
+    ' Backstop only. Converts a literal "---" line the Reporter may emit into
+    ' the 40 em-dash rule. The social-label half of the old FixSocialAndDivider
+    ' has been removed; that work now runs before the styling loop, in
+    ' StripSocialMarkers and BulletSocialLabels, so IsSocial can fire.
+    Dim p As Paragraph, r As Range, t As String
+    For Each p In ActiveDocument.Paragraphs
+        Set r = p.Range.Duplicate
+        r.End = r.End - 1
+        t = Trim(r.Text)
+        If t = "---" Then
+            r.Text = String(40, ChrW(8212))
+        End If
+    Next p
+End Sub
+
+Private Sub StripSocialMarkers()
+    ' Summary only. Runs BEFORE SplitSocials.
+    ' The Reporter prefixes social labels with "- ". SplitSocials and IsSocial
+    ' both match on the bare label, so the prefix stops them firing and the
+    ' label falls through to the generic body branch of the styling loop,
+    ' picking up SpaceAfter = SP_BODY and IND_ITEM. Strip the marker first.
+    ' Full Articles is excluded so a body opening "- Facebook ..." is safe.
+    Dim doc As Document: Set doc = ActiveDocument
+    Dim labels As Variant
+    labels = Array("Facebook", "X (Twitter)", "YouTube")
+    Dim i As Long, j As Long, p As Paragraph
+    Dim raw As String, rest As String, pos As Long, faStart As Long
+
+    faStart = FullArticlesStart()
+    If faStart = 0 Then faStart = doc.Paragraphs.Count + 1
+
+    For i = faStart - 1 To 1 Step -1
+        Set p = doc.Paragraphs(i)
+        raw = p.Range.Text
+        If Len(raw) > 0 Then
+            If Right$(raw, 1) = vbCr Then raw = Left$(raw, Len(raw) - 1)
+        End If
+        If Len(raw) > 1 Then
+            pos = 1
+            Do While pos <= Len(raw) And (Mid$(raw, pos, 1) = " " Or Mid$(raw, pos, 1) = vbTab)
+                pos = pos + 1
+            Loop
+            If pos <= Len(raw) Then
+                If Mid$(raw, pos, 1) = "-" Or Mid$(raw, pos, 1) = ChrW(8226) Then
+                    pos = pos + 1
+                    Do While pos <= Len(raw) And (Mid$(raw, pos, 1) = " " Or Mid$(raw, pos, 1) = vbTab)
+                        pos = pos + 1
+                    Loop
+                    rest = Mid$(raw, pos)
+                    For j = LBound(labels) To UBound(labels)
+                        If Left$(rest, Len(labels(j))) = CStr(labels(j)) Then
+                            doc.Range(p.Range.Start, p.Range.Start + pos - 1).Delete
+                            Exit For
+                        End If
+                    Next j
+                End If
+            End If
+        End If
+    Next i
+End Sub
+Private Sub BulletSocialLabels()
+    ' Summary only. Runs AFTER SplitSocials.
+    ' Adds the bullet + tab to a social label sitting on its own line, so
+    ' IsSocial fires and the gold hanging-bullet layout is applied.
+    ' Whole-paragraph match only and Full Articles excluded, so a body
+    ' opening "Facebook said..." is never touched. Idempotent: a label that
+    ' already carries the bullet no longer equals the bare label.
+    Dim doc As Document: Set doc = ActiveDocument
+    Dim labels As Variant
+    labels = Array("Facebook", "X (Twitter)", "YouTube")
+    Dim i As Long, j As Long, p As Paragraph, s As String, faStart As Long
+
+    faStart = FullArticlesStart()
+    If faStart = 0 Then faStart = doc.Paragraphs.Count + 1
+
+    For i = faStart - 1 To 1 Step -1
+        Set p = doc.Paragraphs(i)
+        s = ParaText(p)
+        For j = LBound(labels) To UBound(labels)
+            If s = CStr(labels(j)) Then
+                p.Range.InsertBefore ChrW(8226) & vbTab
+                Exit For
+            End If
+        Next j
+    Next i
 End Sub
