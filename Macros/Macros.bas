@@ -15,7 +15,7 @@ Option Explicit
 
 ' ---- Indent constants (CENTIMETERS) ----
 Private Const IND_TRAD    As Single = 0.04
-Private Const IND_SEC_NUM As Single = 0.67  ' i. ii. iii. numeral
+Private Const IND_SEC_NUM As Single = 0.44  ' i. ii. iii. numeral
 Private Const IND_SEC_TXT As Single = 1.31   ' section text, No relevant news
 Private Const IND_ART_NUM As Single = 1.31   ' 1. 2. 3. numeral
 Private Const IND_ART_TXT As Single = 1.94   ' headline text, body, URLs, rosters
@@ -28,14 +28,14 @@ Private Const MARGIN_LEFT   As Single = 3.17
 Private Const MARGIN_RIGHT  As Single = 3.17
 ' ---- Spacing (points) ----
 Private Const SP_TITLE    As Single = 12
+Private Const SP_TITLE_BEFORE As Single = 19   ' gap below the header rule
 Private Const SP_DATE     As Single = 18
-Private Const SP_TRAD     As Single = 6
-Private Const SP_SECTION  As Single = 6
+Private Const SP_TRAD     As Single = 3
+Private Const SP_SECTION  As Single = 3
 Private Const SP_HEAD     As Single = 10
 Private Const SP_BODY     As Single = 10
 Private Const SP_META     As Single = 10   ' gap above the byline line
 Private Const DIV_LEN     As Integer = 41
-
 
 Sub FormatMorningClips()
 
@@ -73,6 +73,7 @@ Sub FormatMorningClips()
     ReplaceAll "^l", "^p"
 
     TrimParagraphSpaces
+    FixUrlSpaces
 
     Dim pass As Long, lenBefore As Long
     For pass = 1 To 30
@@ -124,6 +125,7 @@ Sub FormatMorningClips()
             p.Range.Font.Bold = True
             p.Range.Font.Underline = wdUnderlineSingle
             p.Alignment = wdAlignParagraphCenter
+            p.SpaceBefore = SP_TITLE_BEFORE
             p.SpaceAfter = SP_TITLE
         ElseIf IsDateLine(s) Then
             p.Range.Font.Bold = True
@@ -1152,4 +1154,35 @@ Private Sub FixSectionAlignment()
             End If
         End If
     Next p
+End Sub
+
+Sub FixUrlSpaces()
+    ' Repairs URLs broken by a line-wrap space, in the text and in the link target.
+    ' Only touches paragraphs whose text starts with http, so body text is safe.
+    ' Safe to run standalone on an already-formatted document.
+    Dim doc As Document: Set doc = ActiveDocument
+    Dim i As Long, p As Paragraph, s As String, pos As Long, guard As Long
+    Dim h As Hyperlink
+
+    ' 1. strip every space out of URL paragraphs
+    For i = 1 To doc.Paragraphs.Count
+        Set p = doc.Paragraphs(i)
+        s = ParaText(p)
+        If LCase(Left(s, 4)) = "http" Then
+            guard = 0
+            Do
+                s = ParaText(p)
+                pos = InStr(s, " ")
+                If pos = 0 Then Exit Do
+                doc.Range(p.Range.Start + pos - 1, p.Range.Start + pos).Delete
+                guard = guard + 1
+            Loop While guard < 100
+        End If
+    Next i
+
+    ' 2. clean existing link targets
+    For Each h In doc.Hyperlinks
+        If InStr(h.Address, "%20") > 0 Then h.Address = Replace(h.Address, "%20", "")
+        If InStr(h.Address, " ") > 0 Then h.Address = Replace(h.Address, " ", "")
+    Next h
 End Sub
