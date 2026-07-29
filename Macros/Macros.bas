@@ -15,9 +15,12 @@ Option Explicit
 
 ' ---- Indent constants (CENTIMETERS) ----
 Private Const IND_TRAD    As Single = 0.04
-Private Const IND_CAT     As Single = 0.83
-Private Const IND_ITEM    As Single = 1.31
-Private Const IND_NONEWS  As Single = 1.3
+Private Const IND_SEC_NUM As Single = 0.67  ' i. ii. iii. numeral
+Private Const IND_SEC_TXT As Single = 1.31   ' section text, No relevant news
+Private Const IND_ART_NUM As Single = 1.31   ' 1. 2. 3. numeral
+Private Const IND_ART_TXT As Single = 1.94   ' headline text, body, URLs, rosters
+Private Const IND_SOC_NUM As Single = 0.64   ' bullet
+Private Const IND_SOC_TXT As Single = 1.27   ' social label
 ' ---- Margins (CENTIMETERS) ----
 Private Const MARGIN_TOP    As Single = 2.49
 Private Const MARGIN_BOTTOM As Single = 2.54
@@ -31,7 +34,7 @@ Private Const SP_SECTION  As Single = 6
 Private Const SP_HEAD     As Single = 10
 Private Const SP_BODY     As Single = 10
 Private Const SP_META     As Single = 10   ' gap above the byline line
-Private Const DIV_LEN     As Integer = 40
+Private Const DIV_LEN     As Integer = 41
 
 
 Sub FormatMorningClips()
@@ -142,51 +145,48 @@ Sub FormatMorningClips()
             p.SpaceBefore = SP_SECTION
         ElseIf IsSection(s) Then
             p.Range.Font.Bold = True
-            p.LeftIndent = CentimetersToPoints(IND_NONEWS)
-            p.FirstLineIndent = CentimetersToPoints(IND_CAT - IND_NONEWS)
+            p.LeftIndent = CentimetersToPoints(IND_SEC_TXT)
+            p.FirstLineIndent = CentimetersToPoints(IND_SEC_NUM - IND_SEC_TXT)
             p.SpaceBefore = SP_SECTION
-            p.TabStops.ClearAll
-            p.TabStops.Add Position:=CentimetersToPoints(IND_NONEWS), Alignment:=wdAlignTabLeft
         ElseIf IsSocial(s) Then
             p.Range.Font.Bold = True
             doc.Range(p.Range.Start, p.Range.Start + 2).Font.Bold = False
-            p.LeftIndent = CentimetersToPoints(IND_NONEWS)
-            p.FirstLineIndent = CentimetersToPoints(IND_CAT - IND_NONEWS)
+            p.LeftIndent = CentimetersToPoints(IND_SOC_TXT)
+            p.FirstLineIndent = CentimetersToPoints(IND_SOC_NUM - IND_SOC_TXT)
             p.SpaceBefore = SP_SECTION
             p.SpaceAfter = 0
             p.TabStops.ClearAll
-            p.TabStops.Add Position:=CentimetersToPoints(IND_NONEWS), Alignment:=wdAlignTabLeft
+            p.TabStops.Add Position:=CentimetersToPoints(IND_SOC_TXT), Alignment:=wdAlignTabLeft
+        ElseIf InStr(1, s, "No relevant news", vbTextCompare) = 1 Then
+            p.LeftIndent = CentimetersToPoints(IND_SEC_TXT)
+            p.FirstLineIndent = 0
+            p.SpaceAfter = SP_BODY
         ElseIf IsRosterLine(s) Then
-            p.LeftIndent = CentimetersToPoints(IND_ITEM)
+            p.LeftIndent = CentimetersToPoints(IND_ART_TXT)
             p.SpaceAfter = SP_BODY
         ElseIf IsHeadline(s) Then
             p.Range.Font.Bold = True
-            p.LeftIndent = CentimetersToPoints(IND_ITEM)
-            p.FirstLineIndent = CentimetersToPoints(IND_CAT - IND_ITEM)
+            p.LeftIndent = CentimetersToPoints(IND_ART_TXT)
+            p.FirstLineIndent = CentimetersToPoints(IND_ART_NUM - IND_ART_TXT)
             p.SpaceBefore = SP_HEAD
             p.TabStops.ClearAll
-            p.TabStops.Add Position:=CentimetersToPoints(IND_ITEM), Alignment:=wdAlignTabLeft
+            p.TabStops.Add Position:=CentimetersToPoints(IND_ART_TXT), Alignment:=wdAlignTabLeft
         ElseIf inFullArticles And IsBylineLine(s) Then
-            p.LeftIndent = CentimetersToPoints(IND_ITEM)
+            p.LeftIndent = CentimetersToPoints(IND_ART_TXT)
             p.SpaceBefore = SP_META
             p.SpaceAfter = 0
         ElseIf inFullArticles And IsLongFormDate(s) Then
-            p.LeftIndent = CentimetersToPoints(IND_ITEM)
+            p.LeftIndent = CentimetersToPoints(IND_ART_TXT)
             p.SpaceBefore = 0
             p.SpaceAfter = SP_BODY
         ElseIf IsURL(s) Then
-            p.LeftIndent = CentimetersToPoints(IND_ITEM)
+            p.LeftIndent = CentimetersToPoints(IND_ART_TXT)
             MakeHyperlink p, s
         ElseIf IsDivider(s) Then
             p.LeftIndent = 0
             p.SpaceBefore = SP_SECTION
-        ElseIf s = "No relevant news" Then
-            SetCleanText p, "No relevant news"
-            p.LeftIndent = CentimetersToPoints(IND_NONEWS)
-            p.FirstLineIndent = 0
-            p.SpaceAfter = SP_BODY
         Else
-            p.LeftIndent = CentimetersToPoints(IND_ITEM)
+            p.LeftIndent = CentimetersToPoints(IND_ART_TXT)
             p.SpaceAfter = SP_BODY
         End If
     Next i
@@ -198,6 +198,8 @@ Sub FormatMorningClips()
     SplitEntryHeaders
     DashFullArticleHeadlines
     FixDivider
+    FormatFullArticlesLayout
+    FixSectionAlignment
 
     Application.ScreenUpdating = True
     MsgBox "FormatMorningClips done.", vbInformation
@@ -564,7 +566,7 @@ Private Sub PruneAttributionRoster()
     Dim i As Long, ch As String, d As String
     Dim curUnit As String, kept As String
 
-    tracked = Array("Neil Shen", "HongShan", "Hongshan", "HSG", "IDG", "ZhenFund", "Hillhouse", "Granite Asia", "Matrix Partners China", "Qiming Venture Partners", "KKR", "EQT", "TPG", "Walden International", "Carlyle")
+    tracked = Array("Neil Shen", "HongShan", "Hongshan", "HSG", "IDG", "ZhenFund", "Hillhouse", "Granite Asia", "Matrix Partners China", "Qiming Venture Partners", "KKR", "EQT", "TPG", "Walden International", "Carlyle", "SoftBank")
 
     lastP = FullArticlesStart()
     If lastP = 0 Then lastP = doc.Paragraphs.Count + 1
@@ -888,8 +890,8 @@ Private Sub HighlightAll()
     Dim green() As String, yellow() As String, turq() As String
     green = Split("Neil Shen", "|")
     yellow = Split("HongShan|Hongshan|HSG", "|")
-    turq = Split("IDG Capital|IDG|ZhenFund|Hillhouse|Granite Asia|Matrix Partners China|Qiming Venture Partners|KKR|EQT|TPG|Walden International|Carlyle", "|")
-
+    turq = Split("IDG Capital|IDG|ZhenFund|Hillhouse|Granite Asia|Matrix Partners China|Qiming Venture Partners|KKR|EQT|TPG|Walden International|Carlyle|SoftBank", "|")
+    
     For i = 1 To doc.Paragraphs.Count
         Set p = doc.Paragraphs(i)
         s = ParaText(p)
@@ -917,7 +919,7 @@ Private Sub HiliteTerm(rng As Range, term As String, clr As Long)
     With f.Find
         .ClearFormatting
         .Text = term
-        .MatchCase = True
+        .MatchCase = False
         .MatchWholeWord = True
         .MatchWildcards = False
         .MatchSoundsLike = False
@@ -1000,7 +1002,7 @@ Sub FixDivider()
         r.End = r.End - 1
         t = Trim(r.Text)
         If t = "---" Then
-            r.Text = String(40, ChrW(8212))
+            r.Text = String(DIV_LEN, ChrW(8212))
         End If
     Next p
 End Sub
@@ -1075,4 +1077,79 @@ Private Sub BulletSocialLabels()
             End If
         Next j
     Next i
+End Sub
+
+Private Sub FormatFullArticlesLayout()
+    ' Gold (July 28): Full Articles region is flush left - zero indent on every
+    ' paragraph - with 1.25 line spacing on date and body text. Headlines and
+    ' bylines stay single-spaced. Runs LAST: it overrides the IND_ITEM indents
+    ' the main styling loop applies, rather than adding FA branches there.
+    ' Final step insets the FULL ARTICLES heading with two literal tabs (per
+    ' gold). That edit breaks exact-text matching of the heading, which is why
+    ' this sub must run after every routine that locates "FULL ARTICLES".
+    Dim doc As Document: Set doc = ActiveDocument
+    Dim faStart As Long, i As Long, p As Paragraph, s As String
+
+    faStart = FullArticlesStart()
+    If faStart = 0 Then Exit Sub                 ' summary-only doc
+
+    For i = faStart + 1 To doc.Paragraphs.Count
+        Set p = doc.Paragraphs(i)
+        s = ParaText(p)
+
+        p.LeftIndent = 0
+        p.FirstLineIndent = 0
+        p.TabStops.ClearAll
+
+        If s = "-ENDS-" Then
+            ' keep centred, single spacing - set by the main loop
+        ElseIf IsSection(s) Or IsHeadline(s) Or IsBylineLine(s) Then
+            p.LineSpacingRule = wdLineSpaceSingle
+        ElseIf IsDivider(s) Or Len(s) = 0 Then
+            ' leave as is
+        Else
+            ' long-form date and body paragraphs
+            p.LineSpacingRule = wdLineSpaceMultiple
+            p.LineSpacing = LinesToPoints(1.25)
+        End If
+    Next i
+
+End Sub
+
+
+
+Private Sub FixSectionAlignment()
+    ' Sections: numeral at IND_SEC_NUM, name at IND_SEC_TXT via explicit tab stop.
+    ' Runs LAST so no earlier ClearAll or reset can undo it.
+    ' SUMMARY ONLY - the "iii. VC Industry News" header inside FULL ARTICLES
+    ' must stay flush left per gold, so anything at or past that heading is skipped.
+    Dim doc As Document: Set doc = ActiveDocument
+    Dim p As Paragraph, s As String, pos As Long
+    Dim faStart As Long, faPos As Long
+
+    faStart = FullArticlesStart()
+    If faStart = 0 Then
+        faPos = doc.Content.End + 1              ' summary-only doc: no boundary
+    Else
+        faPos = doc.Paragraphs(faStart).Range.Start
+    End If
+
+    For Each p In doc.Paragraphs
+        If p.Range.Start < faPos Then            ' <-- summary region only
+            s = ParaText(p)
+            If IsSection(s) Then
+                pos = InStr(p.Range.Text, ".")
+                If pos > 0 And pos < Len(p.Range.Text) Then
+                    If Mid(p.Range.Text, pos + 1, 1) = " " Then
+                        doc.Range(p.Range.Start + pos, p.Range.Start + pos + 1).Text = vbTab
+                    End If
+                End If
+                p.LeftIndent = CentimetersToPoints(IND_SEC_TXT)
+                p.FirstLineIndent = CentimetersToPoints(IND_SEC_NUM - IND_SEC_TXT)
+                p.TabStops.ClearAll
+                p.TabStops.Add Position:=CentimetersToPoints(IND_SEC_TXT), _
+                               Alignment:=wdAlignTabLeft
+            End If
+        End If
+    Next p
 End Sub
