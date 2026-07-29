@@ -15,6 +15,10 @@ gptCapabilities:
   webBrowsing: false
   codeInterpreter: false
 
+conversationStarters:
+  - title: Report
+    text: Report
+
 aISettings:
   model:
     modelNameHint: GPT55Chat

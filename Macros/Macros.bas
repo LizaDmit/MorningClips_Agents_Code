@@ -891,7 +891,7 @@ Private Sub HighlightAll()
     Dim i As Long, p As Paragraph, s As String
     Dim green() As String, yellow() As String, turq() As String
     green = Split("Neil Shen", "|")
-    yellow = Split("HongShan|Hongshan|HSG", "|")
+    yellow = Split("HongShan|Hongshan|HSG|Sequoia China", "|")
     turq = Split("IDG Capital|IDG|ZhenFund|Hillhouse|Granite Asia|Matrix Partners China|Qiming Venture Partners|KKR|EQT|TPG|Walden International|Carlyle|SoftBank", "|")
     
     For i = 1 To doc.Paragraphs.Count

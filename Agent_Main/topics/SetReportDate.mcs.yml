@@ -6,9 +6,6 @@ beginDialog:
   id: main
   intent:
     triggerQueries:
-      - generate morning clips
-      - morning clips
-      - run morning clips
       - generate report
       - new report
       - report
