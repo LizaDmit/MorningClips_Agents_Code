@@ -97,6 +97,7 @@ Sub FormatMorningClips()
     DenumberLeakedRosters
     PruneAttributionRoster
     EnsureDivider
+    RepairArtifacts doc
 
     Dim i As Long, p As Paragraph, s As String
     Dim inFullArticles As Boolean
@@ -1186,3 +1187,39 @@ Sub FixUrlSpaces()
         If InStr(h.Address, " ") > 0 Then h.Address = Replace(h.Address, " ", "")
     Next h
 End Sub
+
+Sub RepairArtifacts(doc As Document)
+    Dim comp As Variant, k As Long, p As Paragraph
+    ' hyphenated compounds split by a source line wrap - pairs of find, replace
+    comp = Array("year-on- year", "year-on-year", _
+                 "year-over- year", "year-over-year", _
+                 "brake-by- wire", "brake-by-wire", _
+                 "fast- fashion", "fast-fashion", _
+                 "book- building", "book-building")
+
+    For Each p In doc.Paragraphs
+        If InStr(1, p.Range.Text, "http", vbTextCompare) = 0 Then
+            ' space eaten after a full stop: shares.Other -> shares. Other
+            FindRepl p.Range, "([a-z][a-z]).([A-Z])", "\1. \2", True
+            For k = LBound(comp) To UBound(comp) Step 2
+                FindRepl p.Range, CStr(comp(k)), CStr(comp(k + 1)), False
+            Next k
+            FindRepl p.Range, Chr(39), ChrW(8217), False
+        End If
+    Next p
+End Sub
+
+Private Sub FindRepl(r As Range, pat As String, rep As String, wild As Boolean)
+    With r.Find
+        .ClearFormatting
+        .Replacement.ClearFormatting
+        .Format = False
+        .Text = pat
+        .Replacement.Text = rep
+        .MatchWildcards = wild
+        .MatchCase = True
+        .Wrap = wdFindStop
+        .Execute Replace:=wdReplaceAll
+    End With
+End Sub
+
