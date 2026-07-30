@@ -15,13 +15,27 @@ Use pypdf only. Do not use pdfplumber, subprocess, pip, or any package install.\
 Run EXACTLY this code, substituting only the input file path, and output only its printed result:\
 \
 import re\
+import unicodedata\
 from pypdf import PdfReader\
+\
+def norm(s):\
+    s = unicodedata.normalize("NFKD", s)\
+    s = re.sub(r"\\b(o|e|a|su|di|tra|bu|ca|sti)T(?=[a-z])",\
+               lambda m: m.group(1) + "ff", s)\
+    s = re.sub(r"(?<=[A-Za-z]) (?=\\.[A-Za-z])", "", s)\
+    for _ in range(5):\
+        new = re.sub(r"(https?://\\S*-)[ \\t]+(?=\\S)", r"\\1", s)\
+        if new == s:\
+            break\
+        s = new\
+        s = re.sub(r"[\\u200b\\u200c\\u200d\\u2060\\ufeff]", "", s)\
+    return s\
 \
 reader = PdfReader(pdf_path)\
 \
 pages_lay = []\
 for page in reader.pages:\
-    lay = page.extract_text(extraction_mode="layout") or ""\
+    lay = norm(page.extract_text(extraction_mode="layout") or "")\
     pages_lay.append([" ".join(ln.split()) for ln in lay.split("\\n")])\
 \
 widths = sorted(len(l) for pg in pages_lay for l in pg if l)\
@@ -31,7 +45,7 @@ plain_parts = []\
 lay_paras = []\
 page_end = set()\
 for page, lines in zip(reader.pages, pages_lay):\
-    plain_parts.append(page.extract_text() or "")\
+    plain_parts.append(norm(page.extract_text() or ""))\
     last_text = -1\
     for i, l in enumerate(lines):\
         if l:\
@@ -93,7 +107,7 @@ else:\
             pieces.append(p)\
         last_idx = i\
 \
-     if pieces and pieces[-1] != "-ENDS-" and pieces[-1].endswith("-ENDS-"):\
+    if pieces and pieces[-1] != "-ENDS-" and pieces[-1].endswith("-ENDS-"):\
         pieces[-1] = pieces[-1][:-6].strip()\
         pieces.append("-ENDS-")\
     print("[[BR]]".join(pieces))\
