@@ -1,338 +1,419 @@
 # Morning Clips - Automated Daily Media Monitoring Pipeline
 
-Prompt source, formatting macro and version history for an automated daily media
-monitoring pipeline. The pipeline converts a single daily PDF of press clips into a
-formatted Daily Media Monitoring Report.
+**Status: complete and in daily production use.**
 
-This repository holds prompt text, macro code and documentation only. It contains no
-client data, no source clip files, no tenant identifiers and no output reports.
+Prompt source, formatting macro and operating documentation for an automated daily media
+monitoring pipeline. The pipeline converts a daily PDF of press clips into a formatted
+Daily Media Monitoring Report in Word, replacing a fully manual process.
+
+Validated against four manually produced benchmark reports and confirmed on live daily
+runs. Every report passes human review before it is issued.
+
+This repository holds prompt text, macro code and documentation only. No client data, no
+source clips, no generated reports, no tenant or model-instance identifiers, no tracked
+keyword terms, no client branding.
 
 ---
 
-## 1. Purpose
+## 1. What it does
 
-Replace a manual, analyst-produced daily clips report with a repeatable pipeline that
-produces output matching the manual benchmark. The pipeline is assistive: a human reviews
-every report before it is issued.
+**Input:** one PDF per day containing that day's press clips. PDF is the only accepted
+input format - the platform's file handling does not accept `.docx`.
 
-**Input:** one PDF per day containing that day's press clips.
-**Output:** plain text, pasted into a Word document where a macro applies all formatting.
+**Output:** a single plain-text block returned in chat, pasted into a Word starter
+template and formatted in one pass by a VBA macro.
 
-The report has two required sections:
+The report contains two sections:
 
-1. **Summary** - condensed treatment of each article, grouped and ordered by section.
-2. **Full Articles** - verbatim article bodies.
+1. **Summary** - each kept article categorised into one of three fixed sections,
+   numbered, trimmed to the paragraphs relevant to the tracked names, with tracked
+   keywords highlighted by category colour.
+2. **Full Articles** - verbatim full bodies of the kept articles, dash-bulleted
+   headlines, byline, date, no URL line, section headers only for populated sections,
+   terminating in `-ENDS-`.
 
-Both sections are required in a live report. Some archived test fixtures were reduced to
-Summary-only on purpose, to validate that path in isolation.
+Relevance to the tracked names is the only reason to keep text. The operator supplies the
+report date; it is never inferred from article dates.
 
 ---
 
 ## 2. Architecture
 
-Single agent, classic orchestration, four inline prompt tools plus a document macro.
+Single agent, classic orchestration, four inline prompt tools chained through global
+variables, plus a Word macro for all formatting.
 
 ```
 Daily PDF
    |
    v
 [1] Extractor      Python / pypdf via code interpreter
-   |               hybrid layout + character extraction
+   |               hybrid extraction: plain-mode text, layout-derived paragraph cuts
    |               emits [[BR]] paragraph delimiters
    v  RawTextPass
 [2] Parser         structures raw text into ===ARTICLE=== blocks
    |               labels: HEADLINE / OUTLET / LINK / DATE / BYLINE / BODY
    v  ParsedBlocksPass
-[3] Reporter       generates the Summary section
+[3] Reporter       categorises, trims, builds the Summary section
    |
-   v  SummaryPass
-[4] FullArticles   generates verbatim full-text bodies
-   |
+   v  SummaryPass ------------+
+[4] FullArticles              |  <- section membership and article order
+   |  <- ParsedBlocksPass     |  <- verbatim body text
    v  FullArticlesPass
-Plain text -> paste into Word -> formatting macro -> final report
+Single SendActivity (code-fenced)
+   |
+   v
+Paste into starter template -> run FormatMorningClips once -> human review -> issue
 ```
 
-### 2.1 Component specifications
+### 2.1 Components
 
-| # | Tool | Model class | Temp | Output type | Role |
-|---|------|-------------|------|-------------|------|
-| 1 | Extractor | code interpreter (Python 3.12.x) | n/a | Text | PDF to raw text with paragraph delimiters |
-| 2 | Parser | small general model | 0 | Text | Raw text to labelled article blocks |
-| 3 | Reporter | large reasoning model | default | **Text** | Summary section |
-| 4 | FullArticles | large general model | default | Text | Verbatim article bodies |
+| # | Tool | Engine | Temp | Output type | Role |
+|---|------|--------|------|-------------|------|
+| 1 | Extractor | code interpreter, Python 3.12.x, pypdf | n/a | Text | PDF to raw text with paragraph delimiters |
+| 2 | Parser | small general model | 0 | Text | Raw text to labelled article blocks, verbatim |
+| 3 | Reporter | large reasoning model | default | **Text** | Categorisation, trimming, Summary build |
+| 4 | FullArticles | large general model | 0 | Text | Verbatim article bodies |
 
-Notes:
+Fixed decisions behind this table:
 
-- Reporter **must** remain on output type `Text`. Switching it to `Document` breaks
-  downstream `.text` extraction.
-- FullArticles was moved from the small model to the large model. The small model has an
-  output-length ceiling that silently abridges large batches without erroring.
-- Extractor uses layout mode for paragraph-boundary detection and character mode for the
-  text itself. The `layout_mode_scale_weight` parameter has no effect once the
-  space-collapsing step runs - do not tune it.
-- The code interpreter is a real Python execution environment in the agent test chat, not a
-  simulation of one.
+- Reporter output type must stay `Text`. `Document` output cannot carry real paragraph
+  marks, bold or highlighting (platform limitation) and breaks the downstream `.text`
+  extraction.
+- The Parser stays on the small model at temperature 0. Reasoning models time out on
+  large mechanical restructuring tasks.
+- FullArticles runs on the full-size model, not the mini variant. The mini variant has an
+  output-length ceiling that silently abridges the largest batches without erroring.
+- The agent's own model setting has no effect on output - each prompt tool carries its
+  own model.
+- Each prompt field has a ceiling of roughly 8,000 characters. Every prompt in this
+  repository was written against that budget; adding a rule means removing one.
 
-### 2.2 Variable contract
+### 2.2 Main flow
 
-After every prompt-tool invocation, extract the text explicitly:
+`OnRecognizedIntent` trigger (trigger phrases for "generate morning clips") ->
+six `Blank()` variable clears -> Question (source file) -> Question (report date) ->
+Extractor invoke -> Parser invoke -> Reporter invoke -> FullArticles invoke -> single
+`SendActivity` -> end.
 
-```
-SetVariable Global.ParsedBlocksPass = Text(Global.parsedBlocks.text)
-```
+Two contracts that make the chain work:
 
-Applies at each stage. Skipping the `Text()` extraction leaves an object where a string is
-expected, and the next stage receives an empty or malformed input.
+1. **Text extraction at every hop.** After each prompt-tool invocation:
+   `SetVariable Global.ParsedBlocksPass = Text(Global.parsedBlocks.text)`. Without the
+   `Text()` wrapper an object is passed where a string is expected and the next stage
+   receives nothing usable.
+2. **`[[BR]]` is the universal break token.** Inter-tool handoffs never carry real
+   newlines - they collapse in transit. `[[BR]]` marks every field and paragraph
+   boundary; the Reporter and FullArticles convert to real breaks only at final output,
+   emitting a blank line between paragraphs so the chat renderer's markdown handling
+   cannot collapse them.
 
-### 2.3 FullArticles design
+### 2.3 Output message wrapping
 
-FullArticles takes two inputs:
+The `SendActivity` output is wrapped in a code fence, written in single-line quoted YAML.
+Without the fence, the chat renderer parses the report as markdown: ordered lists are
+renumbered (`12.` becomes `1.`) and rank labels, stat-block fields and entry labels are
+damaged. The fence disables all of that.
 
-- **SummaryPass** - drives section membership and article order.
-- **ParsedBlocksPass** - supplies the verbatim body text.
+### 2.4 Extractor normalisation
 
-Format requirements: dash-bulleted headlines, no URL line, section headers printed only for
-populated sections, document terminates with `-ENDS-`.
+The Extractor takes character text from pypdf plain mode and paragraph boundaries from
+layout mode. Its `norm()` pass applies: NFKD unicode normalisation; stem-anchored
+ligature repair (sparing camelCase brand names); a space-before-period repair for a
+character-mode extraction defect; URL line-wrap repair; line-wrap newlines to single
+spaces with multi-space collapse; paragraph and page boundaries to `[[BR]]`; a
+comma/semicolon join rule healing mid-sentence page splits; a width-based
+paragraph-boundary rule (median line length) separating absorbed sub-headings; and
+`-ENDS-` preserved as a standalone segment.
 
----
-
-## 3. Formatting macro
-
-`FormatMorningClips` - Word VBA, stored in `Normal.dotm`. Current version: v11.
-
-All formatting, numbering, structural cleanup and keyword highlighting is applied
-deterministically by the macro, not by any model.
-
-### 3.1 Environment prerequisite
-
-One-time, per machine: **AutoCorrect -> AutoFormat As You Type -> uncheck "Automatic
-numbered lists".**
-
-This cannot be set programmatically from the macOS build of VBA. It must be done by hand on
-every machine that runs the macro. Without it, Word re-numbers pasted lists and overwrites
-the macro's numbering.
-
-### 3.2 Transfer
-
-Export and import via `.bas` file only. Never transfer by copy-paste. Recipients on Windows
-must unblock the downloaded file in file properties before importing.
-
-### 3.3 Disabled code
-
-`RepairLongParagraphs` is commented out, not deleted. It was confirmed to split a single
-long paragraph six ways. Leave it disabled.
-
-### 3.4 Pending macro work
-
-Full Articles section detection is not yet implemented. It requires handling:
-
-- un-numbered headlines
-- byline lines
-- long-form date lines
-- the `-ENDS-` terminator
+Do not switch the text source to layout mode - it inserts spaces inside URLs across the
+whole batch. `layout_mode_scale_weight` has no effect after the space-collapsing step.
 
 ---
 
-## 4. Keyword categories and highlighting
+## 3. Categorisation and highlighting
 
-Three fixed tracked categories. The actual terms are held outside this repository in the
-runtime configuration; only structure is documented here.
+### 3.1 Sections and precedence
 
-| Category | Highlight colour | Contents |
-|----------|-----------------|----------|
-| Cat1 | Green | one named individual |
-| Cat2 | Yellow | the client organisation and its abbreviation |
-| Cat3 | Turquoise | eleven peer and competitor firms |
+Three fixed sections, strict precedence, one section per article:
 
-**Highlighting rule:** highlight the exact tracked string only. Never extend the highlight
-to surrounding words, to a title, or to a longer version of the name.
+| Section | Category | Highlight | Contents |
+|---------|----------|-----------|----------|
+| i | Cat1 | Green | one tracked individual |
+| ii | Cat2 | Yellow | the client organisation, its abbreviation, and its former entity name |
+| iii | Cat3 | Turquoise | a fixed list of peer and competitor firms |
 
----
+Any Cat1 keyword -> section i; else any Cat2 -> section ii; else any Cat3 -> section iii;
+no tracked keyword -> article excluded. Cat2 presence anywhere in an article forces
+section ii regardless of how many Cat3 names appear.
 
-## 5. Summary-section editorial rules (Reporter)
+The keyword terms themselves live in the runtime configuration, not in this repository.
 
-Prompt structure:
+### 3.2 Matching rules
 
-```
-A1 - A5    ALWAYS rules, hoisted to top level
-SHAPE      ROUNDUP / COMMENT / SINGLE STORY
-S1         funding gate
-S2         case B
-S3         head
-S4         tail
-QUOTES
-BOILERPLATE
-```
+These rules are the product of the hardest debugging in the project. Their exact wording
+matters:
 
-### 5.1 Structural rule about the prompt itself
+- **Section iii is the default; sections i and ii are exceptions.** Each exception
+  requires a verifiable literal string match inside that article's own body.
+  Prohibition-style wording ("never categorise by topic") failed; a literal string lookup
+  holds.
+- **Matches count in any body segment, not only prose sentences** - this covers roster
+  lines of the form `Name | Firm | #rank`.
+- **Whole-phrase matching only.** A keyword never matches inside an unrelated longer name
+  or as a fragment of a common word.
+- **Listed variants match; unlisted aliases do not.** Short forms of a tracked firm's
+  name are matched via an explicit variant list, case-insensitively.
+- **Per-article independence.** Every article is categorised on its own body alone.
+  Without this instruction, articles in a batch bleed into each other's section
+  assignments.
 
-**Unconditional keeps must be top-level minimal single lines. Never as clauses inside a
-numbered step, and never with emphatic or qualifying language.**
+### 3.3 Highlighting
 
-A1 is a global rule, not scoped to one shape. Rewording it produces spillover across every
-shape at once, in both directions - one revision improved two articles and regressed a
-third, with four confirmed spillovers across three shapes in a single version. Treat any
-edit to A1 as a full-batch regression risk.
-
-### 5.2 Borderline paragraph test
-
-Remove the tracked name from the paragraph. If it still reads as standalone general
-context, drop the paragraph - unless an explicit override applies, or it is a
-named-regulator or company-status paragraph.
-
-Tolerance: over-keeping or under-keeping by one paragraph is generally acceptable against
-the benchmark.
+Every occurrence of every tracked keyword is highlighted in its own category colour,
+including keywords from other categories appearing inside an article. Only the exact
+keyword string is highlighted - never surrounding words, a title, or a longer form of the
+name. Applied deterministically by the macro (`HiliteTerm`, `MatchCase = False`), never
+by a model.
 
 ---
 
-## 6. Version history
+## 4. Summary editorial logic (Reporter)
 
-### Reporter
+Prompt structure: CONFIG -> STEP1 CATEGORISE -> STEP2 HIGHLIGHT -> STEP3 TRIM ->
+STEP4 BUILD -> OUTPUT CONTRACT -> GUARDRAILS, with unconditional ALWAYS rules hoisted to
+top level.
 
-| Version | STEP3 chars | Full prompt chars | Batch score | Note |
-|---------|-------------|-------------------|-------------|------|
-| pre-rewrite | - | - | 5 / 14 | baseline |
-| v2 | - | - | 12 / 19 | |
-| v3 (draft) | - | - | not run | superseded, partially absorbed into v3b |
-| **v3b** | ~9,220 | ~14,059 | **15 / 19** | current installed version |
-| v3c | ~9,081 (-139) | - | planned | single-line A1 revert |
+STEP3 decides an article's shape and trims accordingly:
 
-**v3b batch detail**
+- **SINGLE STORY** (default): keep the contiguous core block relevant to the tracked
+  name, drop the tail. CASE A (tracked name is a party to the event) and CASE B (tracked
+  name is only a background owner or parent) set how much survives; an OVERRIDE
+  guarantees every tracked name surfaces at least once; a funding gate keeps short
+  backer-funding stories whole.
+- **ROUNDUP** (only when the article is built as parallel ranked or profiled entries and
+  that list is the article's subject): keep the opening narrative and every entry
+  containing a tracked keyword, verbatim, with source rank labels copied exactly - never
+  renumbered. A list of names inside a prose story is not a roundup.
 
-| Batch | Articles | Result |
-|-------|----------|--------|
-| Batch 1 | 6 | 5 / 5 acceptable |
-| Batch 2 | 5 | 5 / 5 acceptable, four exact |
-| Batch 3 | 6 | 4 / 6 - one partial, one regression |
-| Batch 4 | 3 | 1 / 3 - two blocked upstream by the parser defect |
+Rules about editing this prompt, learned the hard way:
 
-**v3 draft edits, superseded:** A1 dek carve-out, R1 two-condition dek test, R2 strict
-source-order plus bridge clause, R5 roster-header locator.
+- **Unconditional keeps are top-level minimal single lines** - never clauses inside a
+  numbered step, never with emphatic or qualifying language. The global lead-keep rule
+  was reworded once and produced five confirmed regressions across three shapes in a
+  single version.
+- **Stop editing when it works.** Every late-stage regression in this project came from a
+  change chasing something that was not broken. The trimming logic, build rules and
+  section structure that went untouched are the parts that never failed.
 
-**v3c planned change:** revert A1 to minimal wording -
-
-> A1 ALWAYS keep body paragraph 1 (the lead), except a ROUNDUP dek under R1, where the next
-> paragraph becomes the lead instead.
-
-Expected to reverse all five confirmed A1 spillovers. Accepted trade-off: one article
-regresses by one paragraph, which is within tolerance.
-
----
-
-## 7. Open defects
-
-| ID | Defect | Root cause | Fix target |
-|----|--------|-----------|------------|
-| A | One article regressed 5 -> 9 paragraphs on v3b | A1 rewrite spillover outside ROUNDUP; the emphatic clause weakened the S3 head stop | Reporter (v3c) |
-| B | Two articles in batch 4 unusable | Parser corrupts `[[BR]]` to `[BR]]` from the second or third break onward; Reporter then receives one blob per article and re-segments by eye | **Parser** |
-| C | Batch 3 structural fidelity: stripped rank labels, flattened stat blocks, dropped roster headers | same token corruption as B | **Parser** |
-| D | Duplicate `1.` numbering on two articles | numbering step | Step 4 |
-| E | Article order flipped within a section | ordering step | Step 4 |
-| F | One article keeps an extra product-launch paragraph | within tolerance | not fixing |
-
-### 7.1 The `[[BR]]` corruption is the root cause of run-to-run variance
-
-Extractor output has clean `[[BR]]` tokens. Parser output degrades from the second or third
-break onward. Every observed instance of non-deterministic output and structural fidelity
-loss traces back to this.
-
-**Do not attempt a Reporter-side tolerance patch.** This was tried and caused timeouts on
-the largest batch. It was reverted. The Parser is the correct fix target.
+Accepted output bar: wrong categorisation is a failure; over- or under-keeping by about a
+paragraph is within tolerance; omissions that are faithful to the source are not defects;
+empty LINK fields on some source batches are source-faithful, not defects.
 
 ---
 
-## 8. Roadmap
+## 5. Formatting macro
 
-In sequence:
+`FormatMorningClips` - Word VBA, single module, stored in `Normal.dotm`, transferred as a
+`.bas` file. All visual formatting, numbering, highlighting and structural cleanup is
+deterministic and lives here. No model produces formatted output.
 
-1. **Parser `[[BR]]` token fix.** Blocks defects B and C, and all further Reporter tuning on
-   the affected articles.
-2. **Reporter v3c.** Single-line A1 revert. Re-run batch 4 to confirm the two blocked
-   articles unblock; re-run the full batch to confirm defect A returns to benchmark and no
-   new spillovers appear.
-3. **Step 4 fixes.** Duplicate numbering; intra-section article ordering.
-4. **FullArticles build.** Begin once the Reporter prompt is stable.
-5. **Macro update** for Full Articles section detection.
+The macro is **one-shot and not idempotent** - run it exactly once on a fresh paste.
+
+### 5.1 What it does, in order
+
+Early text repair: strip the Reporter's own headline numbers (the macro applies its own);
+`RepairArtifacts` (eaten spaces after full stops, broken hyphens, straight-to-curly
+apostrophes - skips URL-containing paragraphs); junk-character cleanup (zero-width
+spaces, BOM, non-breaking spaces); hyperlink field codes unlinked to plain URL text;
+URL space repair; content-control and form-field removal.
+
+Structural pass: title/byline/date splits; roster-line splits; doubled-entry-header
+splits; horizontal-rule shape removal; roster rank-number regeneration (Word AutoFormat
+strips them); attribution-roster pruning with a Full Articles boundary guard; colour-tag
+stripping; social-channel label normalisation; the divider placed before the
+`FULL ARTICLES` heading as a fixed-length em-dash line with paragraph borders cleared.
+
+Numbering and layout: both sections numbered with a counter reset between them, as typed
+text (not Word list objects); Summary indents and alignment; Full Articles flush left at
+1.25 line spacing; Full Articles headlines converted to dash format last, after
+numbering.
+
+Highlighting: category-coloured keyword highlighting as in section 3.3.
+
+### 5.2 Measured layout
+
+All values measured from the manual benchmark document, applied in centimetres via
+`CentimetersToPoints()`: sections 1.31/0.67, articles 1.94/1.31, social channels
+1.27/0.64, "no relevant news" lines aligned under the section name rather than the
+numeral. Margins 2.49 top, 2.54 bottom, 3.17 left and right. Sections, socials and
+headlines use hanging indent plus tab stop so names land at a fixed position regardless
+of numeral width.
+
+### 5.3 Coding rules in this module
+
+- No line-continuation characters anywhere - they corrupt on transfer.
+- `ListFormat.RemoveNumbers` per paragraph, never document-wide (unreliable on Windows).
+- `MatchWildcards = False` explicitly on every literal find; `wdFindStop`, never
+  `wdFindContinue` (prevents infinite re-matching); every loop progress-guarded.
+- `RepairLongParagraphs` is **commented out, not deleted** - it split one long paragraph
+  six ways. It stays disabled.
 
 ---
 
-## 9. Hard constraints
+## 6. Environment setup (per machine, one time)
 
-Architectural decisions already tested and closed. Do not reopen without new evidence.
-
-- **No workflow-automation platform, no low-code app front end, no HTTP connectors.** Single
-  agent only.
-- **Classic orchestration with inline prompt tools is the only viable architecture.**
-  - Connected agents strip data bindings at the boundary: *"variable data type not eligible
-    to receive or return values"*.
-  - Global variables fail across agent boundaries: *"Identifier not recognised"*.
-  - Generative orchestration causes session drift.
-- **All formatting stays in the macro.** No model is asked to produce formatted output.
-- **Human review before issue.** Every report is checked by a person against the benchmark.
-- Premium agent licensing is available; premium workflow-automation licensing is not.
+1. **Word: AutoCorrect -> AutoFormat As You Type -> uncheck "Automatic numbered lists."**
+   Cannot be set programmatically from the macOS build of VBA. Without it, Word renumbers
+   the pasted report and overwrites the macro's numbering.
+2. Import the macro into `Normal.dotm` via `.bas` Import File - never by pasting code.
+   Windows users must unblock the downloaded `.bas` first (Properties -> Unblock).
+3. Install the starter template: a Word document carrying the client letterhead as an
+   inline header image. The template and logo are not in this repository.
 
 ---
 
-## 10. Conventions
+## 7. Daily operating procedure
 
-### Naming
+1. Trigger the agent with a trigger phrase.
+2. Upload the day's clips PDF and give the report date when prompted.
+3. Copy the single returned output block (inside the code fence).
+4. Paste into a fresh copy of the starter template.
+5. Run `FormatMorningClips` once.
+6. **Human review before issue** - check categorisation and highlighting, and remove any
+   photo captions. Caption removal is deliberately manual: it is pattern-matching on
+   prose, and a human glance is safer than a rule that could catch a real sentence.
 
-- Prompt tools: PascalCase, named for their function, no positional numbers - `Extractor`,
+---
+
+## 8. Validation
+
+Benchmarked against four manually produced reports (6, 5, 6 and 3 articles) and confirmed
+on live daily runs.
+
+**Final state: all 19 benchmark articles coherent, on-topic and correctly categorised,
+six exact matches to the benchmark, and live runs producing correct Summary and Full
+Articles sections end to end.** Categorisation - the hard acceptance bar - is verified
+across every batch: whole-phrase matching with no false positives, correct precedence,
+per-article independence, correct colour-coded highlighting. Layout feedback from the
+pilot review (indentation, spacing, letterhead) is closed.
+
+Testing discipline used throughout, to be kept for any future change:
+
+1. Run a changed batch **twice back-to-back** before attributing any difference to the
+   change - the pipeline has inherent run-to-run variance.
+2. One change at a time; full batch re-run before the next edit.
+3. Retain both the raw `.txt` and the formatted `.docx`. Formatting is not diagnosable
+   from pasted plain text - pastes strip Word numbering and paragraph breaks.
+4. Diagnose from file data, never from screenshots.
+5. Judge against the acceptance bar in section 4, not against byte-identity with the
+   benchmark.
+
+---
+
+## 9. Known and accepted limitations
+
+Documented so they are not mistaken for defects, and not "fixed" into regressions:
+
+- **Delimiter degradation on the longest roundups.** `[[BR]]` tokens are clean out of the
+  Extractor and can degrade in the Parser on the largest batches, which is the origin of
+  the residual run-to-run variance. Every repair approach tried (a dedicated repair
+  stage; Reporter-side tolerance) exceeded the runtime budget on publish and was
+  reverted. Current behaviour is within the accepted bar. Leave it alone unless output
+  actually fails review.
+- **Original in-body paragraph boundaries are unrecoverable** once the source PDF does
+  not carry them; reconstructed breaks are plausible, not identical. A small number of
+  mid-sentence splits at page boundaries are known and accepted.
+- **Embedded tables render as flattened tab-separated text**, matching the text form of
+  the manual benchmark. No visual table reconstruction.
+- **Numbering is typed text**, not Word `ListFormat` objects. Visually identical to the
+  benchmark; a list-object implementation was assessed and not needed.
+- **The tracked individual's section and the social-channels block** are format-verified
+  but have not yet been exercised by a live day's input containing that coverage.
+- **Photo captions** are removed by the human reviewer by design (section 7).
+- Test-pane success does not guarantee published success - runtime limits differ.
+  Anything that passes in test must be confirmed published.
+
+---
+
+## 10. Closed design decisions
+
+Tested and settled. Do not reopen without new evidence.
+
+- **Single agent, classic orchestration, inline prompt tools.** Connected agents strip
+  data bindings at the boundary ("variable data type not eligible to receive or return
+  values"); global variables do not cross agent boundaries ("Identifier not recognised");
+  generative orchestration causes session drift and bleeds state between runs.
+- **No workflow-automation platform, no low-code app front end, no HTTP connectors.**
+  The available licensing covers the agent platform only; the macro also requires desktop
+  Word regardless, so an automated document hand-off buys nothing.
+- **PDF-only input.** A `.docx`-based Extractor is a dead end on this platform.
+- **Labelled plain text with `===ARTICLE===` delimiters for handoff, not JSON.** JSON is
+  fragile with article body content and unnecessary between language models.
+- **All formatting in the macro, never in a prompt.** A tag-based highlighting scheme was
+  assessed and rejected: it returns highlighting to the model and adds a stripping step
+  for something the macro does deterministically.
+- **Report date is operator-supplied**, set in a deterministic expression, never
+  model-inferred.
+
+### 10.1 Approaches tried and rejected
+
+Recorded so they are not re-attempted:
+
+- Deterministic delimiter-repair stage between Parser and Reporter - passed in test,
+  timed out on publish.
+- Reporter-side tolerance for malformed delimiters - timed out on the largest batch.
+- Parser step forcing re-paragraphing of oversized segments - fired inconsistently
+  between runs (model variance); prose re-paragraphing cannot be made deterministic in a
+  prompt. Fully reverted; deterministic re-paragraphing belongs in the macro if anywhere.
+- Semantic-rules Extractor rewrite - destroyed the paragraph-break signal; reverted to
+  the mechanical rules.
+- Layout-mode text source in the Extractor - broke every URL in the batch; reverted to
+  plain-mode text with layout-derived cuts.
+- A six-part rewrite of the Reporter trim step - regressed paragraph counts badly;
+  reverted to the confirmed baseline, then improved by single surgical edits only.
+- `.docx` Extractor rewrite - ruled out by the input constraint.
+
+---
+
+## 11. Troubleshooting
+
+| Symptom | Cause |
+|---------|-------|
+| `12.` renders as `1.`; rank labels or stat-block fields damaged in chat | output not code-fenced; renderer is parsing markdown |
+| Numbering overwritten after paste into Word | machine missing the AutoCorrect setting (section 6) |
+| Spaces inside URLs (`w w w`) across a whole batch | Extractor text source switched to layout mode |
+| Literal colour tags in the report text | Reporter prompt has regained a plain-text / highlight contradiction |
+| A tracked firm routed to section iii instead of ii | precedence or whole-phrase matching wording altered |
+| Section assignments bleed between articles | per-article independence instruction missing |
+| One long paragraph split many ways | `RepairLongParagraphs` re-enabled |
+| Whole articles missing from Full Articles on a large batch | FullArticles moved back to the mini model |
+| Empty URL line, or an omission versus the benchmark | check the source first - both are usually source-faithful |
+| Macro run twice on one document | not recoverable - re-paste and run once |
+
+---
+
+## 12. Repository conventions
+
+- Prompt tools: PascalCase, named for function, no positional numbers - `Extractor`,
   `Parser`, `Reporter`, `FullArticles`.
-- Variables: `Pass` suffix - `RawTextPass`, `ParsedBlocksPass`, `SummaryPass`,
+- Global variables: `Pass` suffix - `RawTextPass`, `ParsedBlocksPass`, `SummaryPass`,
   `FullArticlesPass`.
-
-### Prompt files
-
-- `.txt`, never `.md`. One file per prompt.
-- Version in the filename: `Reporter_v3b.txt`.
-- No metadata inside the prompt file. Character counts, changelog and scorecards live in
-  this README only.
-- `.gitattributes` enforces `eol=lf`.
-
-### Change discipline
-
-- Surgical edits only. Minimal changes that do not perturb already-validated behaviour.
-- Every prompt edit gets an explicit changelog entry and a character-count delta.
-- Full section rewrites, not partial diffs.
-- Each component is validated in isolation against a named benchmark batch before being
-  chained.
-- Regression traces are always cited against a named benchmark batch.
-
-### Revert protocol
-
-If a change regresses categorisation or reintroduces `[[BR]]` leakage, restore the saved
-baseline verbatim. Do not patch forward.
-
-### Git
-
-- Always `git add <folder>`. Never `git add -A` - it cross-contaminates commit messages
-  across components.
+- Prompts as `.txt`, one file per prompt, version in the filename (`Reporter_v3b.txt`),
+  no metadata inside the file. Macro as `.bas`. `.gitattributes` enforces `eol=lf`.
+- Change discipline, if anything is ever revisited: surgical edits only; full section
+  rewrites, not partial diffs; a changelog entry and character-count delta per edit;
+  regressions traced against a named benchmark batch; and if a change regresses
+  categorisation or reintroduces delimiter leakage, restore the saved baseline verbatim -
+  never patch forward.
+- `git add <folder>` always; never `git add -A`.
 - Repository is private.
 
 ---
 
-## 11. Testing
-
-Four benchmark batches, produced manually and treated as the quality bar: 6, 5, 6 and 3
-articles respectively. Fixture files are not committed.
-
-Procedure per version:
-
-1. Run all four batches.
-2. Retain both the raw `.txt` output and the formatted `.docx` for combined content and
-   formatting review.
-3. Score per article: exact / acceptable / partial / fail.
-4. Record the scorecard in section 6 of this README.
-
-Formatting differences cannot be diagnosed from pasted plain text alone - plain-text pastes
-strip Word auto-numbering and paragraph breaks. Always review the `.docx`.
-
----
-
-## 12. Not in this repository
+## 13. Not in this repository
 
 - Client data, source PDFs, generated reports
-- Tracked keyword terms
-- Tenant, environment and model instance identifiers
+- Tracked keyword terms and variant lists
+- Client letterhead and starter template
+- Tenant, environment and model-instance identifiers
 - Benchmark fixture files
